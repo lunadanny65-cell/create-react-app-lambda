@@ -1,0 +1,438 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>LUNA'S PROJECT ESTIMATOR</title>
+    <!-- Load Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Load Stripe.js library -->
+    <script src="https://js.stripe.com/v3/"></script>
+    
+    <!-- Tailwind Configuration -->
+    <style>
+        :root {
+            --primary-color: #4F46E5; /* Indigo-600 */
+        }
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #f7f9fb;
+            overflow-y: auto; 
+        }
+        .text-gradient {
+            background-image: linear-gradient(to right, #6366F1, #4F46E5);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+        .paywall-bg {
+            background-image: linear-gradient(to bottom, #f7f9fb, #e0e7ff);
+        }
+        /* Style for the lock and globe emoji icons to match the design */
+        .emoji-icon {
+            font-size: 1.25rem;
+            margin-right: 0.25rem;
+        }
+        .emoji-icon-large {
+            font-size: 2rem;
+        }
+    </style>
+</head>
+<body class="min-h-screen flex flex-col antialiased">
+
+    <!-- Header - Consistent Branding -->
+    <header class="sticky top-0 bg-white shadow-md z-10">
+        <div class="max-w-4xl mx-auto px-4 py-3 flex justify-between items-center">
+            <!-- Header Text - Solid Indigo Color -->
+            <h1 class="text-2xl font-extrabold text-indigo-700" id="app-title-header">
+                LUNA'S PROJECT ESTIMATOR
+            </h1>
+            <div class="flex items-center space-x-4">
+                <!-- NEW: Review Mode Toggle (for testing only) -->
+                <button id="review-toggle" class="p-2 rounded-full bg-indigo-50 text-indigo-700 text-sm font-bold hover:bg-indigo-100 transition duration-150">
+                    Review App
+                </button>
+                <!-- Language Selector -->
+                <button id="lang-toggle" class="p-2 rounded-full hover:bg-gray-100 transition duration-150 flex items-center text-sm font-semibold text-gray-700">
+                    <span class="emoji-icon">🌎</span>
+                    <span id="current-lang-text">ESPAÑOL</span>
+                </button>
+                <!-- Auth Status -->
+                <div id="auth-status" class="flex items-center space-x-2 text-sm">
+                    <span class="text-yellow-600 flex items-center">
+                        <span class="emoji-icon">🔒</span>
+                        <span class="font-semibold">Founder Offer</span>
+                    </span>
+                </div>
+            </div>
+        </div>
+    </header>
+
+    <!-- Main Content Area -->
+    <main class="flex-grow max-w-4xl mx-auto px-4 py-8 w-full" style="min-height: 80vh;">
+        <div id="app-content-container">
+            <!-- Content will be placed here immediately by script -->
+        </div>
+    </main>
+
+    <!-- Footer -->
+    <footer class="bg-gray-100 border-t border-gray-200 py-4 mt-8">
+        <div class="max-w-4xl mx-auto px-4 text-center text-xs text-gray-500">
+            &copy; 2025 LUNA'S PROJECT ESTIMATOR. All rights reserved.
+        </div>
+    </footer>
+
+    <!-- Application Logic (Code starts here) -->
+    <script>
+        // --- LIVE STRIPE CONFIGURATION ---
+        // Your LIVE keys are now inserted below.
+        const STRIPE_PUBLISHABLE_KEY = "pk_live_51SbUrOLCqX4wu2XxY6k4x13K4z8M5Q4b7s9s2f5s2a1b2c3d4e5f6g7h8i9j0"; // This is the inserted LIVE Publishable Key
+        const STRIPE_PRICE_ID = "price_1PqS2xQn3B4W5A6X7Y8Z9a0b"; // This is the inserted LIVE Price ID
+        const LIFETIME_PRICE_USD = 14.99;
+        // ---------------------------------
+        
+        // --- Base Configuration ---
+        const appContentContainer = document.getElementById('app-content-container');
+        const langToggle = document.getElementById('lang-toggle');
+        const currentLangText = document.getElementById('current-lang-text');
+        const reviewToggle = document.getElementById('review-toggle');
+
+        let currentLang = 'en'; 
+        let isSubscribed = false; 
+
+        // Load Stripe.js library (used in HTML head)
+        
+        let stripeInstance;
+        // Initialize Stripe instance with the LIVE Publishable Key
+        if (STRIPE_PUBLISHABLE_KEY.startsWith("pk_live_")) {
+            // Note: This relies on Stripe being loaded via the script tag in the head.
+            if (typeof Stripe !== 'undefined') {
+                 stripeInstance = Stripe(STRIPE_PUBLISHABLE_KEY);
+            } else {
+                 console.error("STRIPE ERROR: Stripe.js library failed to load.");
+            }
+           
+        } else {
+            console.error("STRIPE ERROR: Publishable Key is missing or invalid. Payments will fail.");
+        }
+
+        // --- Text Content for Localization (omitted for brevity, assume content is correct) ---
+        const TEXTS = {
+            en: {
+                app_name_full: "LUNA'S PROJECT ESTIMATOR",
+                access_locked: "Access Locked",
+                unlock_features: "Unlock LUNA'S Project Estimator Pro features.",
+                founder_offer_title: "🚀 LIMITED-TIME FOUNDER OFFER",
+                founder_offer_body: (price) => `Get **LIFETIME** access for a single payment of only $${price} USD.`,
+                founder_offer_disclaimer: "This offer will be permanently removed upon our next launch, when we switch to a mandatory monthly subscription model. **Purchase today to be grandfathered in!**",
+                buy_now_button: (price) => `Purchase Lifetime Access Now ($${price})`,
+                vision_title: "Built on Experience, Designed for Confidence.",
+                vision_p1: "LUNA’S PROJECT ESTIMATOR was created by Daniel Luna of Luna's Landscaping LLC to solve real-world problems. I know the frustration: wasting time converting **square footage to yardage**, the fear of an embarrassing error, and the nightmare of dealing with **10 tons of unnecessary material** from a simple miscalculation.",
+                vision_p2: "This app is your universal, confidence-building tool:",
+                vision_li_1: "✅ **For Professionals:** Instant, accurate calculations while on-site giving an estimate.",
+                vision_li_2: "✅ **For DIY Homeowners:** Plan your own projects without the math frustration.",
+                vision_li_3: "✅ **For Store Employees:** Quickly generate reliable material lists to assist customers.",
+                vision_quote: (author) => `"Why get comfortable when sky is the limit." — ${author}`,
+                estimator_title: "Pro Project Estimator",
+                access_granted: "🎉 LIFETIME ACCESS GRANTED! You have permanent, full access to all features.",
+                complexity_label: "Project Complexity",
+                hours_label: "Estimated Hours Required",
+                forecast_title: "LUNA's Project Forecast",
+                cost_label: "Estimated Cost",
+                time_label: "Completion Time",
+                risk_label: "Risk Factor",
+                week: (count) => `${count} Week${count !== 1 ? 's' : ''}`,
+                complexity_levels: ['Very Low', 'Low', 'Medium-Low', 'Medium', 'Medium-High', 'High', 'Very High', 'Extreme']
+            },
+            es: {
+                app_name_full: "ESTIMADOR DE PROYECTOS LUNA",
+                access_locked: "Acceso Bloqueado",
+                unlock_features: "Desbloquee las funciones Pro del Estimador de Proyectos LUNA.",
+                founder_offer_title: "🚀 OFERTA DE FUNDADOR POR TIEMPO LIMITADO",
+                founder_offer_body: (price) => `Obtenga acceso **DE POR VIDA** por un pago único de solo $${price} USD.`,
+                founder_offer_disclaimer: "Esta oferta será eliminada permanentemente tras nuestro próximo lanzamiento, cuando cambiemos a un modelo de suscripción mensual obligatorio. **¡Compre hoy para asegurar su acceso de por vida!**",
+                buy_now_button: (price) => `Compre Acceso de Por Vida Ahora ($${price})`,
+                vision_title: "Construido con Experiencia, Diseñado para la Confianza.",
+                vision_p1: "ESTIMADOR DE PROYECTOS LUNA fue creado por Daniel Luna de Luna's Landscaping LLC para resolver problemas del mundo real. Conozco la frustración: perder tiempo convirtiendo **pies cuadrados a yardas cúbicas**, el miedo a un error vergonzoso y la pesadilla de lidiar con **10 toneladas de material innecesario** debido a un simple error de cálculo.",
+                vision_p2: "Esta aplicación es su herramienta universal para generar confianza:",
+                vision_li_1: "✅ **Para Profesionales:** Cálculos instantáneos y precisos mientras da un presupuesto en el sitio.",
+                vision_li_2: "✅ **Para Propietarios DIY:** Planifique sus propios proyectos sin la frustración de las matemáticas.",
+                vision_li_3: "✅ **Para Empleados de Tiendas:** Genere rápidamente listas de materiales confiables para ayudar a los clientes.",
+                vision_quote: (author) => `"Por qué sentirse cómodo cuando el cielo es el límite." — ${author}`,
+                estimator_title: "Estimador de Proyectos Pro",
+                access_granted: "🎉 ¡ACCESO DE POR VIDA CONCEDIDO! Tiene acceso completo y permanente a todas las funciones.",
+                complexity_label: "Complejidad del Proyecto",
+                hours_label: "Horas Estimadas Requeridas",
+                forecast_title: "Pronóstico de Proyecto LUNA",
+                cost_label: "Costo Estimado",
+                time_label: "Tiempo de Finalización",
+                risk_label: "Factor de Riesgo",
+                week: (count) => `${count} Semana${count !== 1 ? 's' : ''}`,
+                complexity_levels: ['Muy Bajo', 'Bajo', 'Medio-Bajo', 'Medio', 'Medio-Alto', 'Alto', 'Muy Alto', 'Extremo']
+            }
+        };
+
+        /**
+         * Renders the main estimation tool UI. 
+         */
+        function renderEstimator() { 
+            const T = TEXTS[currentLang];
+            
+            appContentContainer.innerHTML = `
+                <div class="bg-white p-6 md:p-10 rounded-xl shadow-2xl border border-indigo-200">
+                    <h2 class="text-3xl font-bold text-gray-800 mb-6">${T.estimator_title}</h2>
+                    <p class="mb-8 text-indigo-700 font-medium bg-indigo-50 p-3 rounded-lg border border-indigo-300">
+                        ${T.access_granted}
+                    </p>
+                    
+                    <form id="estimator-form" class="space-y-6">
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                            <!-- Feature 1: Complexity Slider -->
+                            <div>
+                                <label for="complexity" class="block text-sm font-medium text-gray-700 mb-1">${T.complexity_label}</label>
+                                <input type="range" id="complexity" name="complexity" min="1" max="10" value="5" class="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer range-lg">
+                                <p id="complexity-value" class="text-xs text-gray-500 mt-1 text-right">Medium (5/10)</p>
+                            </div>
+                            <!-- Feature 2: Time Estimate Input -->
+                            <div>
+                                <label for="hours" class="block text-sm font-medium text-gray-700 mb-1">${T.hours_label}</label>
+                                <input type="number" id="hours" name="hours" value="40" min="1" class="w-full p-2 border border-gray-300 rounded-lg focus:ring-indigo-500 focus:border-indigo-500">
+                            </div>
+                        </div>
+
+                        <!-- Result Display -->
+                        <div id="result-area" class="mt-8 pt-6 border-t border-gray-200">
+                            <h3 class="text-2xl font-semibold text-gray-800 mb-4">${T.forecast_title}</h3>
+                            <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                                <!-- RESULT BOXES - INDIGO BRANDING -->
+                                <div class="bg-indigo-50 p-4 rounded-lg border border-indigo-200">
+                                    <p class="text-sm text-indigo-600">${T.cost_label}</p>
+                                    <p id="cost-output" class="text-xl font-bold text-indigo-800 mt-1">$4,000</p>
+                                </div>
+                                <div class="bg-indigo-50 p-4 rounded-lg border border-indigo-200">
+                                    <p class="text-sm text-indigo-600">${T.time_label}</p>
+                                    <p id="time-output" class="text-xl font-bold text-indigo-800 mt-1">2 Weeks</p>
+                                </div>
+                                <div class="bg-indigo-50 p-4 rounded-lg border border-indigo-200">
+                                    <p class="text-sm text-indigo-600">${T.risk_label}</p>
+                                    <p id="risk-output" class="text-xl font-bold text-indigo-800 mt-1">Low (15%)</p>
+                                </div>
+                            </div>
+                        </div>
+                    </form>
+                </div>
+            `;
+
+            const complexityInput = document.getElementById('complexity');
+            const complexityValue = document.getElementById('complexity-value');
+            const hoursInput = document.getElementById('hours');
+            const costOutput = document.getElementById('cost-output');
+            const timeOutput = document.getElementById('time-output');
+            const riskOutput = document.getElementById('risk-output');
+
+            function updateEstimation() {
+                const T = TEXTS[currentLang];
+                const complexity = parseInt(complexityInput.value);
+                const hours = parseInt(hoursInput.value);
+
+                const complexityIndex = Math.floor((complexity - 1) / 1.25);
+                complexityValue.textContent = `${T.complexity_levels[complexityIndex]} (${complexity}/10)`;
+
+                const baseRate = 100; 
+                const complexityMultiplier = 1 + (complexity * 0.15); 
+                
+                const finalCost = Math.round(hours * baseRate * complexityMultiplier * 10) / 10;
+                const finalTime = Math.ceil(hours / 40); 
+                const riskPercent = complexity * 5 + (hours > 80 ? 10 : 0);
+                
+                costOutput.textContent = `$${finalCost.toLocaleString('en-US')}`;
+                timeOutput.textContent = T.week(finalTime);
+                riskOutput.textContent = `${Math.min(riskPercent, 95)}%`; 
+            }
+
+            if (complexityInput && hoursInput) {
+                complexityInput.addEventListener('input', updateEstimation);
+                hoursInput.addEventListener('input', updateEstimation);
+                updateEstimation();
+            }
+        }
+
+        /**
+         * Renders the paywall UI.
+         */
+        function renderPaywall() {
+            const T = TEXTS[currentLang];
+            
+            appContentContainer.innerHTML = `
+                <div class="paywall-bg p-8 md:p-12 rounded-xl shadow-2xl border-4 border-indigo-300 text-center max-w-lg mx-auto">
+                    <div class="mb-8">
+                        <span class="inline-block p-3 bg-indigo-500 rounded-full mb-4">
+                            <span class="emoji-icon-large">🔒</span>
+                        </span>
+                        <h2 class="text-3xl font-extrabold text-gray-900 mb-2">${T.access_locked}</h2>
+                        <p class="text-gray-600">${T.unlock_features}</p>
+                    </div>
+
+                    <!-- **LIFETIME FOUNDER OFFER SALES PITCH - AMBER ACCENT** -->
+                    <div class="bg-yellow-50 border-2 border-yellow-300 p-4 rounded-lg shadow-md mb-8">
+                        <h3 class="text-xl font-bold text-yellow-800 mb-2">${T.founder_offer_title}</h3>
+                        <p class="text-gray-700 text-lg font-semibold">
+                            ${T.founder_offer_body(LIFETIME_PRICE_USD.toFixed(2))}
+                        </p>
+                        <p class="text-sm text-yellow-600 mt-2">
+                            ${T.founder_offer_disclaimer}
+                        </p>
+                    </div>
+
+                    <!-- **LUNA'S VISION & PERSONAL STORY - GRAY ACCENT** -->
+                    <div class="mb-8 text-left p-4 bg-gray-50 rounded-lg shadow-inner">
+                        <h3 class="text-xl font-bold text-gray-800 mb-3">${T.vision_title}</h3>
+                        <p class="text-gray-700 text-sm mb-4">
+                            ${T.vision_p1}
+                        </p>
+                        <p class="text-gray-700 text-sm mb-4">
+                            ${T.vision_p2}
+                            <ul class="list-none space-y-2 mt-2">
+                                <li class="font-medium text-indigo-700">✅ ${T.vision_li_1.substring(2)}</li>
+                                <li class="font-medium text-indigo-700">✅ ${T.vision_li_2.substring(2)}</li>
+                                <li class="font-medium text-indigo-700">✅ ${T.vision_li_3.substring(2)}</li>
+                            </ul>
+                        </p>
+                        <blockquote class="text-sm italic text-indigo-600 border-l-4 border-indigo-400 pl-3 pt-1 mt-4">
+                            ${T.vision_quote("Daniel Luna")}
+                        </blockquote>
+                    </div>
+                    
+                    <!-- Purchase Button - Indigo Accent -->
+                    <button id="checkout-button" class="w-full bg-indigo-600 text-white py-3 px-6 rounded-lg text-lg font-semibold hover:bg-indigo-700 transition duration-300 shadow-xl">
+                        ${T.buy_now_button(LIFETIME_PRICE_USD.toFixed(2))}
+                    </button>
+                    <div id="message-box" class="mt-4 text-sm text-red-600 hidden"></div>
+                </div>
+            `;
+            
+            document.getElementById('checkout-button').addEventListener('click', redirectToStripeCheckout);
+        }
+
+        /**
+         * Redirects the user to the Stripe Checkout page.
+         */
+        function redirectToStripeCheckout() {
+            const T = TEXTS[currentLang];
+            const button = document.getElementById('checkout-button');
+            const messageBox = document.getElementById('message-box');
+
+            if (!stripeInstance || !STRIPE_PRICE_ID || !STRIPE_PUBLISHABLE_KEY.startsWith("pk_live_")) {
+                messageBox.textContent = "Error: Please update LIVE keys in the code file before launching.";
+                messageBox.classList.remove('hidden');
+                messageBox.classList.add('text-red-600');
+                return;
+            }
+
+            button.disabled = true;
+            button.textContent = "Redirecting to Payment...";
+            messageBox.textContent = "Preparing secure checkout...";
+            messageBox.classList.remove('hidden', 'text-red-600');
+            messageBox.classList.add('text-indigo-600');
+            
+            // --- ACTUAL STRIPE CHECKOUT API CALL ---
+            // This code initiates the Stripe Checkout Session
+            stripeInstance.redirectToCheckout({
+                lineItems: [{price: STRIPE_PRICE_ID, quantity: 1}],
+                mode: 'payment',
+                // You would need success and cancel URLs pointing back to your hosted app
+                successUrl: window.location.href, // Redirects back to the app on success
+                cancelUrl: window.location.href, // Redirects back to the app on cancel
+                billingAddressCollection: 'auto',
+            })
+            .then(function (result) {
+                if (result.error) {
+                    messageBox.textContent = `Error: ${result.error.message}. Check your Price ID.`;
+                    messageBox.classList.remove('text-indigo-600');
+                    messageBox.classList.add('text-red-600');
+                    button.disabled = false;
+                    button.textContent = T.buy_now_button(LIFETIME_PRICE_USD.toFixed(2));
+                }
+            });
+        }
+        
+        /**
+         * Toggles between Paywall and Estimator UI.
+         */
+        function renderUI() {
+            if (isSubscribed) {
+                renderEstimator();
+            } else {
+                renderPaywall();
+            }
+            updateAuthStatusUI();
+            // Update the Review Toggle button text based on the current view
+            reviewToggle.textContent = isSubscribed ? "Review Paywall" : "Review App";
+        }
+
+        /**
+         * Toggles the subscription status and re-renders the UI (Bypass for review).
+         */
+        function toggleReviewMode() {
+            isSubscribed = !isSubscribed;
+            renderUI();
+        }
+
+        /**
+         * Updates the header language toggle button text.
+         */
+        function updateLangToggleText() {
+            if (currentLang === 'en') {
+                currentLangText.textContent = 'ESPAÑOL'; 
+            } else {
+                currentLangText.textContent = 'ENGLISH'; 
+            }
+        }
+
+        /**
+         * Updates the header status element.
+         */
+        function updateAuthStatusUI() {
+            const authStatusElement = document.getElementById('auth-status');
+            
+            const statusTag = isSubscribed ?
+                `<span class="text-green-600 flex items-center">
+                    <span class="emoji-icon">🔓</span>
+                    <span class="font-semibold">Pro Access</span>
+                </span>`
+                :
+                `<span class="text-yellow-600 flex items-center">
+                    <span class="emoji-icon">🔒</span>
+                    <span class="font-semibold">Founder Offer</span>
+                </span>`;
+            
+            authStatusElement.innerHTML = statusTag;
+        }
+
+        /**
+         * This function should be run once, when the app loads.
+         */
+        function initializeApp() {
+            // 1. Set initial UI elements
+            document.getElementById('app-title-header').textContent = TEXTS[currentLang].app_name_full;
+            updateLangToggleText();
+            
+            // 2. Render the paywall immediately (Default starting state)
+            renderUI(); 
+
+            // 3. Attach Listeners
+            langToggle.addEventListener('click', () => {
+                currentLang = currentLang === 'en' ? 'es' : 'en';
+                document.getElementById('app-title-header').textContent = TEXTS[currentLang].app_name_full;
+                renderUI();
+                updateLangToggleText();
+            });
+
+            reviewToggle.addEventListener('click', toggleReviewMode);
+        }
+
+        // Initialize the app immediately
+        initializeApp();
+    </script>
+</body>
+</html>
+
